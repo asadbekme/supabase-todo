@@ -1,4 +1,6 @@
+import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -58,6 +60,9 @@ export default function Home() {
           >
             Documentation
           </a>
+          <Button asChild>
+            <Link href="/signup">Sign up</Link>
+          </Button>
         </div>
       </main>
     </div>

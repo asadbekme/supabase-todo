@@ -1,116 +1,87 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TodoItem } from "./todo-item";
 
 interface Todo {
   id: string;
   title: string;
-  is_done: boolean;
-  inserted_at?: string;
+  description: string | null;
+  is_completed: boolean;
+  created_at: string;
 }
 
-export function TodoList() {
-  const supabase = createSupabaseBrowserClient();
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [newTodo, setNewTodo] = useState("");
-  const [loading, setLoading] = useState(false);
+interface TodoListProps {
+  todos: Todo[];
+}
 
-  const fetchTodos = async () => {
-    const { data, error } = await supabase
-      .from("todos")
-      .select("*")
-      .order("inserted_at", { ascending: false });
+export function TodoList({ todos }: TodoListProps) {
+  const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
 
-    if (error) console.error(error);
-    else setTodos(data || []);
-  };
+  const filteredTodos = todos.filter((todo) => {
+    if (filter === "active") return !todo.is_completed;
+    if (filter === "completed") return todo.is_completed;
+    return true;
+  });
 
-  const addTodo = async () => {
-    if (!newTodo.trim()) return;
-    setLoading(true);
-
-    const { error } = await supabase.from("todos").insert([{ title: newTodo }]);
-
-    if (error) console.error(error);
-    else setNewTodo("");
-
-    setLoading(false);
-  };
-
-  const toggleTodo = async (id: string, done: boolean) => {
-    const { error } = await supabase
-      .from("todos")
-      .update({ is_done: !done })
-      .eq("id", id);
-
-    if (error) console.error(error);
-  };
-
-  const deleteTodo = async (id: string) => {
-    const { error } = await supabase.from("todos").delete().eq("id", id);
-    if (error) console.error(error);
-  };
-
-  useEffect(() => {
-    const fetchData = async () => {
-      await fetchTodos();
-    };
-    fetchData();
-
-    const channel = supabase
-      .channel("todos-changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "todos" },
-        () => fetchTodos()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  const activeCount = todos.filter((t) => !t.is_completed).length;
+  const completedCount = todos.filter((t) => t.is_completed).length;
 
   return (
-    <div className="space-y-5 max-w-md mx-auto">
-      <div className="flex gap-2">
-        <Input
-          value={newTodo}
-          onChange={(e) => setNewTodo(e.target.value)}
-          placeholder="Add new todo..."
-        />
-        <Button onClick={addTodo} disabled={loading}>
-          {loading ? "Adding..." : "Add"}
-        </Button>
-      </div>
-
-      <ul className="space-y-2">
-        {todos.map((todo) => (
-          <li
-            key={todo.id}
-            className="flex justify-between items-center border rounded-lg p-2"
-          >
-            <span
-              onClick={() => toggleTodo(todo.id, todo.is_done)}
-              className={`cursor-pointer ${
-                todo.is_done ? "line-through text-gray-400" : ""
+    <Card>
+      <CardHeader>
+        <div className="flex justify-between items-center">
+          <CardTitle>Vazifalar ro&apos;yxati</CardTitle>
+          <div className="flex gap-2 text-sm">
+            <button
+              onClick={() => setFilter("all")}
+              className={`px-3 py-1 rounded-md ${
+                filter === "all"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary hover:bg-secondary/80"
               }`}
             >
-              {todo.title}
-            </span>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => deleteTodo(todo.id)}
+              Barchasi ({todos.length})
+            </button>
+            <button
+              onClick={() => setFilter("active")}
+              className={`px-3 py-1 rounded-md ${
+                filter === "active"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary hover:bg-secondary/80"
+              }`}
             >
-              Delete
-            </Button>
-          </li>
-        ))}
-      </ul>
-    </div>
+              Faol ({activeCount})
+            </button>
+            <button
+              onClick={() => setFilter("completed")}
+              className={`px-3 py-1 rounded-md ${
+                filter === "completed"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary hover:bg-secondary/80"
+              }`}
+            >
+              Bajarilgan ({completedCount})
+            </button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {filteredTodos.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">
+            {filter === "active" && "Faol vazifalar yo'q"}
+            {filter === "completed" && "Bajarilgan vazifalar yo'q"}
+            {filter === "all" && "Hali vazifa qo'shilmagan"}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {filteredTodos.map((todo) => (
+              <TodoItem key={todo.id} todo={todo} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

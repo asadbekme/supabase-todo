@@ -1,24 +1,80 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
-export function middleware(req: NextRequest) {
-  const token = req.cookies.get("sb-access-token")?.value;
-  const { pathname } = req.nextUrl;
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
 
-  const isAuthPage =
-    pathname.startsWith("/login") || pathname.startsWith("/signup");
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value,
+            ...options,
+          });
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          });
+          response.cookies.set({
+            name,
+            value,
+            ...options,
+          });
+        },
+        remove(name: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value: "",
+            ...options,
+          });
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          });
+          response.cookies.set({
+            name,
+            value: "",
+            ...options,
+          });
+        },
+      },
+    }
+  );
 
-  if (!token && pathname.startsWith("/dashboard")) {
-    return NextResponse.redirect(new URL("/login", req.url));
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Auth sahifalarga kirish (agar login bo'lsa, dashboardga yo'naltirish)
+  if (
+    user &&
+    (request.nextUrl.pathname === "/login" ||
+      request.nextUrl.pathname === "/signup")
+  ) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  if (token && isAuthPage) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+  // Dashboard sahifaga kirish (agar login bo'lmasa, login sahifasiga yo'naltirish)
+  if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {
-  matcher: ["/dashboard", "/login", "/signup"],
+  matcher: ["/dashboard/:path*", "/login", "/signup"],
 };
